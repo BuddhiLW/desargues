@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Varcalc** is a Clojure library that bridges Emmy (symbolic mathematics) with Manim Community Edition (mathematical animation) via libpython-clj. The system computes derivatives symbolically, converts them to LaTeX, and renders beautiful mathematical animations.
+**Desargues** is a Clojure library that bridges Emmy (symbolic mathematics) with Manim Community Edition (mathematical animation) via libpython-clj. The system computes derivatives symbolically, converts them to LaTeX, and renders beautiful mathematical animations.
 
 **Technology Stack:**
 - Clojure + Leiningen build system
@@ -40,7 +40,7 @@ manim --version
 ```
 
 ### Generated Output
-Videos are saved to `media/videos/1080p60/` after rendering. Quality can be changed by editing `:quality` parameter in `src/varcalc/manim_quickstart.clj` (`"low_quality"`, `"medium_quality"`, or `"high_quality"`).
+Videos are saved to `media/videos/1080p60/` after rendering. Quality can be changed by editing `:quality` parameter in `src/desargues/manim_quickstart.clj` (`"low_quality"`, `"medium_quality"`, or `"high_quality"`).
 
 ## Architecture: Layered DDD/SOLID Design
 
@@ -58,14 +58,14 @@ Infrastructure Layer (External Systems)
 
 ### Layer Responsibilities
 
-**1. API Layer** (`src/varcalc/api.clj`)
+**1. API Layer** (`src/desargues/api.clj`)
 - Facade pattern providing clean, simple interface
 - Factory methods: `expr`, `func`, `point`
 - Fluent builders: `scene`, `show`, `transform`, `wait`, `render!`
 - High-level workflows: `animate-expression`, `animate-derivative`
 - **Never contains business logic**
 
-**2. Domain Layer** (`src/varcalc/domain/`)
+**2. Domain Layer** (`src/desargues/domain/`)
 - `protocols.clj`: Protocol definitions (interfaces)
   - `IMathematicalObject`, `IEvaluable`, `IDifferentiable`
   - `IRenderable`, `IAnimatable`, `IScene`
@@ -78,7 +78,7 @@ Infrastructure Layer (External Systems)
 - **Pure Clojure + Emmy, no external dependencies**
 - **No I/O, no rendering concerns**
 
-**3. Infrastructure Layer** (`src/varcalc/infrastructure/`)
+**3. Infrastructure Layer** (`src/desargues/infrastructure/`)
 - `manim_adapter.clj`: Manim integration
   - Implements domain protocols for Python interop
   - `ManimMobject`, `ManimAnimation`, `ManimSceneBuilder`
@@ -101,7 +101,7 @@ Infrastructure Layer (External Systems)
 
 **ALWAYS initialize Python before any Manim operations:**
 ```clojure
-(require '[varcalc.manim-quickstart :as mq])
+(require '[desargues.manim-quickstart :as mq])
 (mq/init!)
 ```
 
@@ -110,7 +110,7 @@ This configures:
 - Library path: `/home/lages/anaconda3/envs/manim/lib/libpython3.12.so`
 - Adds conda site-packages to sys.path
 
-**If paths differ on another system**, update `src/varcalc/manim_quickstart.clj:init!` function.
+**If paths differ on another system**, update `src/desargues/manim_quickstart.clj:init!` function.
 
 ### Emmy → LaTeX → Python Pipeline
 
@@ -122,8 +122,8 @@ The conversion pipeline is critical to understand:
 4. **Python → Manim** → Manim renders the LaTeX
 
 **Key functions:**
-- `src/varcalc/emmy_manim.clj`: `emmy->latex`, `latex->python`, `emmy->python`
-- Pipeline in `src/varcalc/emmy_manim_examples.clj:create-derivative-animation`
+- `src/desargues/emmy_manim.clj`: `emmy->latex`, `latex->python`, `emmy->python`
+- Pipeline in `src/desargues/emmy_manim_examples.clj:create-derivative-animation`
 
 ### Python Class Instantiation
 
@@ -184,23 +184,23 @@ When defining records that reference each other, use `declare`:
 ## File Organization
 
 ### Entry Points
-- `src/varcalc/core.clj`: Main `-main` function (invoked by `lein run`)
-- `src/varcalc/api.clj`: Primary API for library users
+- `src/desargues/core.clj`: Main `-main` function (invoked by `lein run`)
+- `src/desargues/api.clj`: Primary API for library users
 
 ### Integration Layers
-- `src/varcalc/manim_quickstart.clj`: Basic Manim setup and initialization
-- `src/varcalc/emmy_manim.clj`: Emmy ↔ Manim conversion utilities
-- `src/varcalc/emmy_manim_examples.clj`: Complete example workflows
+- `src/desargues/manim_quickstart.clj`: Basic Manim setup and initialization
+- `src/desargues/emmy_manim.clj`: Emmy ↔ Manim conversion utilities
+- `src/desargues/emmy_manim_examples.clj`: Complete example workflows
 
 ### Python Scene Definitions
 - `manim_examples.py`: Basic Manim scenes (CreateCircle, SquareToCircle)
 - `emmy_manim_scenes.py`: Emmy-driven scenes (FunctionAndDerivative, ChainRule, TaylorSeries)
 - `equation_evaluation_scenes.py`: Evaluation and table scenes
 
-Python files must be in project root (`/home/lages/Physics/varcalc`) so Clojure can import them via `py/import-module`.
+Python files must be in project root (`/home/lages/Physics/desargues`) so Clojure can import them via `py/import-module`.
 
 ### Tests
-- `test/varcalc/manim_test.clj`: 14 integration tests
+- `test/desargues/manim_test.clj`: 14 integration tests
 - Run with `lein test` (all should pass)
 
 ## Common Development Workflows
@@ -209,7 +209,7 @@ Python files must be in project root (`/home/lages/Physics/varcalc`) so Clojure 
 
 **Option 1: Using High-Level API**
 ```clojure
-(require '[varcalc.api :as v])
+(require '[desargues.api :as v])
 (v/init!)
 
 ;; Define function
@@ -222,7 +222,7 @@ Python files must be in project root (`/home/lages/Physics/varcalc`) so Clojure 
 
 **Option 2: Using Builder Pattern**
 ```clojure
-(require '[varcalc.api :as v])
+(require '[desargues.api :as v])
 (v/init!)
 
 (def e1 (v/expr '(sin x)))
@@ -238,7 +238,7 @@ Python files must be in project root (`/home/lages/Physics/varcalc`) so Clojure 
 
 **Option 3: Using Python Scene Classes**
 ```clojure
-(require '[varcalc.emmy-manim-examples :as ex])
+(require '[desargues.emmy-manim-examples :as ex])
 (ex/render-emmy-scene "ChainRule")
 ```
 
@@ -259,7 +259,7 @@ class MyScene(Scene):
 2. Import and use from Clojure:
 ```clojure
 (let [sys (py/import-module "sys")]
-  (py/call-attr (py/get-attr sys "path") "insert" 0 "/home/lages/Physics/varcalc"))
+  (py/call-attr (py/get-attr sys "path") "insert" 0 "/home/lages/Physics/desargues"))
 
 (let [scenes (py/import-module "emmy_manim_scenes")
       MyScene (py/get-attr scenes "MyScene")
@@ -271,13 +271,13 @@ class MyScene(Scene):
 
 To add new mathematical capabilities:
 
-1. Define protocol in `src/varcalc/domain/protocols.clj`:
+1. Define protocol in `src/desargues/domain/protocols.clj`:
 ```clojure
 (defprotocol IIntegrable
   (integrate [this] "Compute indefinite integral"))
 ```
 
-2. Implement for domain entities in `src/varcalc/domain/math_expression.clj`:
+2. Implement for domain entities in `src/desargues/domain/math_expression.clj`:
 ```clojure
 (extend-type MathExpression
   p/IIntegrable
@@ -286,13 +286,13 @@ To add new mathematical capabilities:
       (create-expression result))))
 ```
 
-3. Add domain service in `src/varcalc/domain/services.clj`:
+3. Add domain service in `src/desargues/domain/services.clj`:
 ```clojure
 (defn integrate-expression [math-expr]
   (p/integrate math-expr))
 ```
 
-4. Expose in API (`src/varcalc/api.clj`):
+4. Expose in API (`src/desargues/api.clj`):
 ```clojure
 (defn integral [math-obj]
   (svc/integrate-expression math-obj))
@@ -345,7 +345,7 @@ All 14 tests should pass. If not, check Python environment configuration.
 
 ## Video Quality Settings
 
-Edit `src/varcalc/manim_quickstart.clj:render-scene!`:
+Edit `src/desargues/manim_quickstart.clj:render-scene!`:
 ```clojure
 (py/call-attr scene "render"
               :quality "low_quality"    ; 480p15 - fast

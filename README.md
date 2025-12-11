@@ -26,8 +26,8 @@ Varcalc is a Clojure library that combines [Emmy](https://github.com/mentat-coll
 
 ```bash
 cd /home/lages/Physics/
-git clone <your-repo-url> varcalc  # or use your existing directory
-cd varcalc
+git clone <your-repo-url> desargues  # or use your existing directory
+cd desargues
 ```
 
 ### 2. Install Manim with Conda
@@ -64,7 +64,7 @@ The project is currently configured for the following paths:
 - Python executable: `/home/lages/anaconda3/envs/manim/bin/python`
 - Library path: `/home/lages/anaconda3/envs/manim/lib/libpython3.12.so`
 
-If your conda installation is in a different location, update these paths in `src/varcalc/manim_quickstart.clj`:
+If your conda installation is in a different location, update these paths in `src/desargues/manim_quickstart.clj`:
 
 ```clojure
 (defn init! []
@@ -141,7 +141,7 @@ lein test
 
 Expected output:
 ```
-Testing varcalc.manim-test
+Testing desargues.manim-test
 
 Ran 14 tests containing 14 assertions.
 0 failures, 0 errors.
@@ -160,8 +160,8 @@ lein repl
 #### Basic Example: Explore a Function
 
 ```clojure
-(require '[varcalc.emmy-manim-examples :as ex])
-(require '[varcalc.manim-quickstart :as mq])
+(require '[desargues.emmy-manim-examples :as ex])
+(require '[desargues.manim-quickstart :as mq])
 (require '[emmy.env :as e :refer [sin cos square D pi]])
 
 ;; Initialize
@@ -210,8 +210,8 @@ lein repl
 #### Using the Clean API (SOLID/DDD)
 
 ```clojure
-(require '[varcalc.api :as v])
-(require '[varcalc.manim-quickstart :as mq])
+(require '[desargues.api :as v])
+(require '[desargues.manim-quickstart :as mq])
 
 ;; Initialize
 (mq/init!)
@@ -236,8 +236,8 @@ lein repl
 ## Project Structure
 
 ```
-varcalc/
-├── src/varcalc/
+desargues/
+├── src/desargues/
 │   ├── core.clj                          # Main entry point (lein run)
 │   ├── manim_quickstart.clj              # Basic Manim setup
 │   ├── emmy_manim.clj                    # Emmy → LaTeX → Python
@@ -256,7 +256,7 @@ varcalc/
 │   └── emmy_python/                      # Emmy-Python bridge
 │       └── equations.clj                 # Sample equations
 │
-├── test/varcalc/
+├── test/desargues/
 │   └── manim_test.clj                    # Integration tests
 │
 ├── *.py                                  # Python scene definitions
@@ -277,7 +277,7 @@ varcalc/
 
 ### Change Video Quality
 
-Edit the quality settings in `src/varcalc/manim_quickstart.clj`:
+Edit the quality settings in `src/desargues/manim_quickstart.clj`:
 
 ```clojure
 (defn render-scene!
@@ -309,7 +309,7 @@ class MyScene(Scene):
 2. Render from Clojure:
 
 ```clojure
-(require '[varcalc.emmy-manim-examples :as ex])
+(require '[desargues.emmy-manim-examples :as ex])
 
 (ex/render-emmy-scene "MyScene")
 ```
@@ -318,7 +318,7 @@ class MyScene(Scene):
 
 ```clojure
 (require '[emmy.env :as e])
-(require '[varcalc.emmy-manim :as em])
+(require '[desargues.emmy-manim :as em])
 
 ;; Function and its first 3 derivatives
 (let [f #(e/sin %)
@@ -345,7 +345,7 @@ conda activate manim
 which python  # Should show /path/to/anaconda3/envs/manim/bin/python
 ```
 
-Update the paths in `src/varcalc/manim_quickstart.clj` to match your system.
+Update the paths in `src/desargues/manim_quickstart.clj` to match your system.
 
 ### LaTeX Rendering Issues
 
