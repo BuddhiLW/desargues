@@ -353,3 +353,293 @@ Edit `src/desargues/manim_quickstart.clj:render-scene!`:
               :quality "high_quality"   ; 1080p60 - best (default)
               :preview false)
 ```
+
+---
+
+## DevX Module: Hot-Reload & Smart Preview System
+
+The DevX module (`desargues.devx.*`) provides Figwheel-style hot-reload for Manim animations. This section documents how to use it.
+
+### Core Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Segment** | A discrete, cacheable portion of an animation with unique ID, hash, dependencies, and render state |
+| **Scene Graph** | DAG of segments with dependency tracking and topological sorting |
+| **Hot Reload** | File watcher detects changes → reloads namespace → marks affected segments dirty → re-renders |
+| **Preview** | Last-frame image preview or OpenGL live preview window |
+
+### Segment States
+
+```
+:pending → :dirty → :rendering → :cached
+                         ↓
+                      :error
+```
+
+- `○` pending - Never rendered
+- `◐` dirty - Needs re-render (code changed)
+- `◔` rendering - Currently rendering
+- `●` cached - Rendered and up-to-date
+- `✗` error - Render failed
+
+### Quick Start
+
+```clojure
+;; 1. Load devx modules
+(require '[desargues.devx.core :as devx])
+(require '[desargues.devx.repl :as repl])
+
+;; 2. Initialize Manim
+(devx/init!)
+
+;; 3. Define segments
+(def intro
+  (devx/segment :intro
+    (fn [scene]
+      (let [title (mob/text "Hello!")]
+        (manim/play! scene (anim/write title))))))
+
+(def main
+  (devx/segment :main
+    :deps #{:intro}  ; Declares dependency
+    (fn [scene]
+      (let [circle (mob/circle)]
+        (manim/play! scene (anim/create circle))))))
+
+;; 4. Build scene graph and load into REPL
+(def my-scene (devx/scene [intro main]))
+(repl/set-graph! my-scene)
+
+;; 5. Start hot-reload
+(repl/w!)  ; Watch with auto-render
+```
+
+### REPL Command Reference
+
+#### State Management
+| Command | Description |
+|---------|-------------|
+| `(repl/set-graph! g)` | Set current working graph |
+| `(repl/get-graph)` | Get current graph |
+| `(repl/clear-graph!)` | Clear current graph |
+
+#### Status & Info
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `(repl/status)` | `(repl/s!)` | Print full status |
+| `(repl/quick-status)` | - | One-line summary |
+| `(repl/show-graph)` | - | ASCII dependency graph |
+| `(repl/segments)` | - | List all segment IDs |
+| `(repl/dirty-segments)` | - | List dirty segment IDs |
+| `(repl/stats)` | - | Statistics map |
+
+#### Rendering
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `(repl/render!)` | `(repl/r!)` | Render dirty segments |
+| `(repl/render-all!)` | - | Force re-render all |
+| `(repl/render-segment! :id)` | - | Render specific segment |
+
+#### Preview (Phase 3)
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `(repl/preview! :id)` | `(repl/p! :id)` | Last-frame preview (opens image) |
+| `(repl/live! :id)` | `(repl/L! :id)` | OpenGL live preview window |
+| `(repl/live! :id :interactive? true)` | - | Interactive with IPython prompt |
+| `(repl/select!)` | `(repl/sel!)` | Interactive segment menu |
+| `(repl/select-and-preview!)` | - | Select then preview |
+| `(repl/select-and-live!)` | - | Select then live preview |
+
+#### Change Management
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `(repl/dirty! :id)` | `(repl/d! :id)` | Mark segment dirty |
+| `(repl/dirty-all!)` | - | Mark all dirty |
+
+#### Export
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `(repl/combine! "out.mp4")` | `(repl/c! "out.mp4")` | Combine cached segments |
+| `(repl/export! "out.mp4")` | - | Render + combine |
+
+#### Hot Reload
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `(repl/watch!)` | - | Start watcher (manual render) |
+| `(repl/watch! :auto-render? true)` | `(repl/w!)` | Watch + auto-render |
+| `(repl/watch! :auto-render? true :auto-combine? true)` | `(repl/W!)` | Watch + auto-render + auto-combine |
+| `(repl/unwatch!)` | `(repl/uw!)` | Stop watcher |
+| `(repl/watching?)` | - | Check if watching |
+| `(repl/watch-status)` | - | Watcher statistics |
+| `(repl/reload!)` | - | Manual reload |
+| `(repl/tracking-report)` | - | Namespace tracking report |
+
+#### Help
+| Command | Description |
+|---------|-------------|
+| `(repl/help)` | Print full command reference |
+
+### Quality Settings
+
+```clojure
+;; Use :quality option on render commands
+(repl/render! :quality :high)
+(repl/preview! :intro :quality :medium)
+
+;; Presets:
+;; :low    = 480p @ 15fps (fast iteration)
+;; :medium = 720p @ 30fps (balanced)
+;; :high   = 1080p @ 60fps (production)
+
+;; Auto-quality based on context
+(require '[desargues.devx.quality :as quality])
+(quality/with-context :export
+  (repl/render!))  ; Uses :high automatically
+```
+
+### Typical Development Workflow
+
+```clojure
+;; 1. Define your segments in a source file
+;; src/myproject/scenes.clj
+
+;; 2. In REPL, load and start watching
+(require '[myproject.scenes :as scenes])
+(repl/set-graph! scenes/my-scene)
+(repl/w!)  ; Start hot-reload with auto-render
+
+;; 3. Edit your source file...
+;; Console shows:
+;;   [change] src/myproject/scenes.clj
+;;   [reload] Reloading: myproject.scenes
+;;   [dirty] 2 segment(s) marked dirty: #{:main :outro}
+;;   [render] Rendering segment: main...
+;;   [render] Completed in 2.3s
+
+;; 4. Preview specific segment
+(repl/p! :main)   ; Opens image viewer with last frame
+(repl/L! :main)   ; Opens OpenGL preview window
+
+;; 5. Interactive selection
+(repl/sel!)
+;; Segments (3)
+;; ───────────────
+;;   1. ● intro     [abc123]
+;;   2. ◐ main      [def456] → intro
+;;   3. ○ outro     [ghi789] → main
+;;
+;; Select segment (number, q=quit, g=graph, d=dirty): 
+
+;; 6. Export final video
+(repl/export! "my-animation.mp4" :quality :high)
+```
+
+### DevX File Structure
+
+```
+src/desargues/devx/
+├── core.clj        # Pure API facade (stateless)
+├── repl.clj        # Stateful REPL workflow (hot-reload commands)
+├── segment.clj     # Segment record, states, hashing
+├── graph.clj       # Scene graph DAG, topological sort
+├── renderer.clj    # Manim rendering, partial files
+├── watcher.clj     # File watching (Beholder)
+├── ns_tracker.clj  # Namespace dependency tracking
+├── reload.clj      # Hot-reload coordination (clj-reload)
+├── preview.clj     # Last-frame preview, image viewers
+├── opengl.clj      # OpenGL live preview
+├── selector.clj    # Interactive segment selector
+├── quality.clj     # Quality presets, auto-quality
+├── events.clj      # Observer pattern for events
+├── specs.clj       # Specification pattern for queries
+├── repository.clj  # Persistence (memory/file)
+├── backend.clj     # Strategy pattern interface
+└── backend/
+    └── manim.clj   # Manim backend implementation
+```
+
+### Key Protocols
+
+| Protocol | Location | Purpose |
+|----------|----------|---------|
+| `ISegment` | segment.clj | Segment identity and state |
+| `IHashable` | segment.clj | Content-addressable hashing |
+| `IRenderBackend` | backend.clj | Strategy for rendering |
+| `ISpecification` | specs.clj | Composable query predicates |
+| `IGraphRepository` | repository.clj | Persistence abstraction |
+| `IQualityProvider` | quality.clj | Quality settings provider |
+
+### Important Implementation Details
+
+#### Segment Metadata for Hot-Reload
+
+The `defsegment` macro captures `:source-ns` metadata automatically. When a namespace changes, the tracker finds all segments with matching `:source-ns` and marks them dirty.
+
+```clojure
+;; Segment stores source namespace
+(:source-ns (meta my-segment))  ; => 'myproject.scenes
+```
+
+#### Content-Addressable Hashing
+
+Segments use SHA-256 hashing for change detection:
+- Hash includes: construct-fn source, dependencies, metadata
+- Changed hash = segment needs re-render
+
+```clojure
+(seg/compute-segment-hash segment dep-hashes)
+;; => "abc123..." (SHA-256 base64, first 12 chars)
+```
+
+#### Partial Movie Files
+
+Each segment renders to a partial file in `media/partial_movie_files/`:
+```
+media/partial_movie_files/
+├── intro_abc123.mp4
+├── main_def456.mp4
+└── outro_ghi789.mp4
+```
+
+Combine with ffmpeg:
+```clojure
+(renderer/combine-partials! graph "final.mp4")
+```
+
+### Error Handling
+
+| Error Type | Behavior |
+|------------|----------|
+| Namespace reload error | Caught, logged, watcher continues |
+| Render error | Segment marked `:error`, can retry |
+| File watcher error | Caught, watcher continues |
+| Python init error | Thrown, must fix before continuing |
+
+### Testing DevX
+
+```bash
+# Run all devx tests
+lein test desargues.devx.segment-test desargues.devx.graph-test \
+          desargues.devx.renderer-test desargues.devx.hot-reload-test
+
+# 59 tests, 198 assertions, 0 failures
+```
+
+### Extension Points
+
+```clojure
+;; Custom quality preset
+(quality/register-preset! :4k {:quality "fourk_quality" :fps 60 :height 2160})
+
+;; Custom event observer
+(events/register-observer! :my-logger
+  (fn [event] (println event))
+  :filter #(= (:type %) :segment-rendered))
+
+;; Custom rendering backend
+(backend/register-backend! :custom my-backend-impl)
+
+;; Custom specification
+(specs/find-segments graph (specs/and-spec (specs/dirty?) (specs/independent?)))
+```

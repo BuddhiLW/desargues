@@ -1,12 +1,13 @@
-# Desargues (Varcalc) - Project Summary
+# Desargues - Project Summary
 
 ## Overview
 
 **Desargues** is a Clojure library that bridges **Emmy** (symbolic mathematics) with **Manim** (mathematical animation) via **libpython-clj**. The system computes derivatives symbolically, converts them to LaTeX, and renders beautiful mathematical animations.
 
-The project provides two API layers:
-1. **Original DDD/SOLID API** (`varcalc.api`) - Domain-driven design with protocols
-2. **New DSL Layer** (`varcalc.dsl.*`) - High-level declarative DSL inspired by 3Blue1Brown videos
+The project provides multiple API layers:
+1. **Original DDD/SOLID API** (`desargues.api`) - Domain-driven design with protocols
+2. **DSL Layer** (`desargues.dsl.*`) - High-level declarative DSL inspired by 3Blue1Brown videos
+3. **DevX Layer** (`desargues.devx.*`) - Hot-reload and incremental rendering system
 
 ## Technology Stack
 
@@ -15,13 +16,18 @@ The project provides two API layers:
 | Clojure | 1.12.3 | Core language |
 | Emmy | 0.32.0 | Symbolic mathematics, automatic differentiation |
 | libpython-clj | 2.026 | Clojure-Python interop for Manim |
+| test.check | 1.1.1 | Property-based testing |
+| typed.clj | 1.3.0 | Optional static type checking |
+| orchestra | 2021.01.01-1 | Spec instrumentation (dev) |
+| beholder | 1.0.2 | File system watching for hot-reload |
+| clj-reload | 0.7.1 | Namespace reloading (preserves defonce) |
 | Manim Community | (Python) | Mathematical animation rendering |
 | Conda | manim env | Python environment management |
 
 ## Project Structure
 
 ```
-src/varcalc/
+src/desargues/
 ├── core.clj                    # Main entry point (-main)
 ├── api.clj                     # High-level facade API
 │
@@ -33,14 +39,51 @@ src/varcalc/
 ├── infrastructure/             # Infrastructure Layer
 │   └── manim_adapter.clj       # Manim integration adapters
 │
+├── devx/                       # Developer Experience Layer
+│   ├── core.clj                # Pure API facade (SRP - no state)
+│   ├── repl.clj                # Stateful REPL workflow (hot-reload, watching)
+│   ├── segment.clj             # Segment record and protocols
+│   ├── graph.clj               # Scene graph DAG with dependency tracking
+│   ├── renderer.clj            # Segment rendering with partial files
+│   ├── reload.clj              # Hot-reload infrastructure (Phase 2)
+│   ├── watcher.clj             # File watching with Beholder (Phase 2)
+│   ├── ns_tracker.clj          # Namespace dependency tracking (Phase 2)
+│   ├── preview.clj             # Enhanced last-frame preview (Phase 3)
+│   ├── opengl.clj              # OpenGL live preview (Phase 3)
+│   ├── selector.clj            # Interactive segment selector (Phase 3)
+│   ├── quality.clj             # Extensible quality presets + auto-quality (OCP)
+│   ├── events.clj              # Observer pattern for segment events
+│   ├── specs.clj               # Specification pattern for queries
+│   ├── repository.clj          # Repository pattern for persistence
+│   ├── backend.clj             # Strategy pattern interface
+│   └── backend/
+│       └── manim.clj           # Manim backend implementation
+│
 ├── dsl/                        # High-level Animation DSL
 │   ├── core.clj                # Core abstractions (Reactive, Temporal, Physics)
 │   ├── math.clj                # Math expression DSL with Emmy
 │   ├── renderer.clj            # DSL-to-Manim rendering bridge
 │   └── examples.clj            # Example scene rewrites
 │
+├── specs/                      # Type Safety Infrastructure
+│   ├── common.clj              # Shared specs (numbers, points, colors, time)
+│   ├── physics.clj             # Physics simulation specs with fdef
+│   ├── api.clj                 # API function specs
+│   ├── validation.clj          # Validation helpers
+│   ├── generators.clj          # test.check generators
+│   └── devx_generators.clj     # Generators for devx module
+│
 ├── videos/                     # Video Rendering System
-│   └── render.clj              # Brachistochrone video renderer (pure Clojure)
+│   ├── render.clj              # Main video renderer
+│   ├── physics.clj             # Physics simulation engine
+│   ├── timeline.clj            # Timeline management
+│   ├── typography.clj          # Text and LaTeX rendering
+│   ├── math_objects.clj        # Mathematical mobject creation
+│   ├── characters.clj          # Character animations
+│   └── scenes/                 # Individual scene definitions
+│       ├── max_rand.clj
+│       ├── pendulum.clj
+│       └── spring_mass.clj
 │
 ├── manim/                      # Low-level Manim Bindings
 │   ├── core.clj                # Python initialization, module access
@@ -57,15 +100,237 @@ src/varcalc/
 ├── brachistochrone.clj         # Physics example (brachistochrone curve)
 └── brachistochrone_pure.clj    # Pure Clojure physics simulation
 
-videos/                         # 3b1b reference videos (cloned repo)
+docs/
+├── BOUNDED_CONTEXTS.md         # DDD bounded context documentation
+└── ADR_CODE_QUALITY.md         # Architecture Decision Record for code standards
+
+dev/
+└── user.clj                    # REPL helpers for specs and type checking
+
+test/desargues/
+├── devx/                       # DevX module tests
+│   ├── segment_test.clj
+│   ├── graph_test.clj
+│   ├── renderer_test.clj
+│   ├── quality_test.clj
+│   ├── events_test.clj
+│   ├── specs_test.clj
+│   ├── backend_test.clj
+│   └── repository_test.clj
+└── ...                         # Other test files
+```
+
+## Architecture Decision Record (ADR)
+
+**See `docs/ADR_CODE_QUALITY.md`** for comprehensive code quality standards.
+
+This codebase follows **SOLID principles** and **GoF design patterns**. Key patterns:
+
+### Design Patterns Used
+
+| Pattern | Implementation | Location |
+|---------|---------------|----------|
+| **Strategy** | `IRenderBackend` protocol | `devx/backend.clj` |
+| **Observer** | Event registry | `devx/events.clj` |
+| **Repository** | `IGraphRepository` protocol | `devx/repository.clj` |
+| **Specification** | `ISpecification` protocol | `devx/specs.clj` |
+| **Facade** | Public API | `devx/core.clj` |
+| **Registry** | Quality presets | `devx/quality.clj` |
+
+### Naming Conventions
+
+**CRITICAL: Bang (`!`) Convention**
+```clojure
+;; Side effects MUST use bang suffix
+(defn register-preset! [k v] (swap! registry assoc k v))
+(defn emit! [event] ...)
+(defn init-backend! [backend] ...)
+
+;; Pure functions NEVER use bang
+(defn resolve-quality [q] ...)
+(defn find-segments [g spec] ...)
+(defn create-segment [id expr] ...)
 ```
 
 ## Key APIs and Usage
 
-### 1. Original API (`varcalc.api`)
+### 1. DevX API - Hot Reload System
+
+The devx module enables Figwheel-style hot-reload for Manim animations:
 
 ```clojure
-(require '[varcalc.api :as v])
+(require '[desargues.devx.core :as devx])
+(require '[desargues.devx.repl :as repl])
+
+;; Initialize
+(devx/init!)
+
+;; Define segments (discrete, cacheable scene portions)
+(def intro 
+  (devx/segment :intro
+    (fn [scene]
+      (let [title (create-text "Hello")]
+        (play! scene (write title))))))
+
+(def main-content
+  (devx/segment :main
+    :deps #{:intro}  ; Depends on intro segment
+    (fn [scene]
+      ;; ... content
+      )))
+
+;; Build scene graph
+(def my-scene (devx/scene [intro main-content]))
+
+;; Preview a segment (quick low-quality render)
+(devx/preview! my-scene :intro)
+
+;; Render only dirty (changed) segments
+(devx/render! my-scene)
+
+;; Render with options
+(devx/render! my-scene :quality :high :parallel? true)
+
+;; Combine partial files into final video
+(devx/export! my-scene "output.mp4")
+
+;; REPL shortcuts (operate on current-scene)
+(repl/use-scene! my-scene)
+(repl/r!)           ; render dirty
+(repl/p! :intro)    ; preview segment
+(repl/s!)           ; status
+(repl/d! :main)     ; mark dirty
+(repl/e! "out.mp4") ; export
+
+;; Preview commands (Phase 3)
+(repl/preview! :intro)          ; Last-frame preview (opens image)
+(repl/live! :intro)             ; OpenGL live preview window
+(repl/live! :intro :interactive? true)  ; With IPython prompt
+(repl/select!)                  ; Interactive segment menu
+(repl/show-graph)               ; ASCII dependency graph
+
+;; Shortcuts
+(repl/L! :intro)                ; Alias for live!
+(repl/sel!)                     ; Alias for select!
+
+;; Hot-reload (in repl.clj)
+(repl/watch!)       ; Start watching source files
+(repl/unwatch!)     ; Stop watching
+(repl/reload!)      ; Manual reload
+```
+
+#### Quality Presets (Extensible via OCP)
+
+```clojure
+(require '[desargues.devx.quality :as quality])
+
+;; Built-in presets
+(quality/get-preset :low)     ; {:quality "low_quality" :fps 15 :height 480}
+(quality/get-preset :medium)  ; {:quality "medium_quality" :fps 30 :height 720}
+(quality/get-preset :high)    ; {:quality "high_quality" :fps 60 :height 1080}
+
+;; Register custom preset (OCP - extend without modification)
+(quality/register-preset! :4k {:quality "fourk_quality" :fps 60 :height 2160})
+
+;; Resolve quality from various inputs
+(quality/resolve-quality :low)               ; Keyword lookup
+(quality/resolve-quality {:fps 24 :height 720})  ; Custom map
+
+;; Auto-quality mode (Phase 3) - context-based selection
+(quality/with-context :development ...)  ; Uses :low
+(quality/with-context :preview ...)      ; Uses :low
+(quality/with-context :export ...)       ; Uses :high
+
+;; Per-segment quality override
+(quality/with-segment-quality segment :high)
+
+;; Check current quality info
+(quality/print-quality-info)
+(quality/print-auto-rules)
+```
+
+#### Event System (Observer Pattern)
+
+```clojure
+(require '[desargues.devx.events :as events])
+
+;; Register custom observer
+(events/register-observer! :my-logger
+  (fn [event]
+    (println "Event:" (:type event) (:segment-id event)))
+  :filter (fn [e] (= (:type e) :segment-rendered)))
+
+;; Built-in observers
+(events/logging-observer println)  ; Logs all events
+(events/metrics-observer)          ; Tracks render metrics
+
+;; Emit events (done automatically by renderer)
+(events/emit! {:type :segment-rendered :segment-id :intro :duration-ms 1500})
+
+;; Unregister
+(events/unregister-observer! :my-logger)
+```
+
+#### Specification Pattern (Composable Queries)
+
+```clojure
+(require '[desargues.devx.specs :as specs])
+
+;; Basic specifications
+(specs/dirty?)       ; Matches dirty segments
+(specs/cached?)      ; Matches cached segments
+(specs/independent?) ; Matches segments with no deps
+
+;; Composable with and/or/not
+(specs/and-spec (specs/dirty?) (specs/independent?))
+(specs/or-spec (specs/has-state? :dirty) (specs/has-state? :error))
+(specs/not-spec (specs/cached?))
+
+;; Query segments
+(specs/find-segments graph (specs/dirty?))
+(specs/find-first graph (specs/has-id? :intro))
+(specs/count-matching graph (specs/cached?))
+```
+
+#### Rendering Backends (Strategy Pattern)
+
+```clojure
+(require '[desargues.devx.backend :as backend])
+
+;; Set active backend
+(backend/set-backend! :manim)
+(backend/set-backend! :mock)  ; For testing
+
+;; Scoped backend switching
+(backend/with-backend :mock
+  (devx/render! scene))
+
+;; Register custom backend
+(backend/register-backend!
+  (reify backend/IRenderBackend
+    (backend-name [_] :custom)
+    (render-segment [_ seg opts] ...)))
+```
+
+#### Repository Pattern (Persistence)
+
+```clojure
+(require '[desargues.devx.repository :as repo])
+
+;; In-memory repository (development/testing)
+(def mem-repo (repo/create-memory-repository))
+(repo/save-graph mem-repo :my-scene graph)
+(repo/load-graph mem-repo :my-scene)
+
+;; File-based repository (persistence)
+(def file-repo (repo/create-file-repository "/path/to/storage"))
+(repo/save-graph file-repo :my-scene graph)
+```
+
+### 2. Original API (`desargues.api`)
+
+```clojure
+(require '[desargues.api :as v])
 
 ;; Initialize Python/Manim
 (v/init!)
@@ -88,11 +353,11 @@ videos/                         # 3b1b reference videos (cloned repo)
     (v/render!))
 ```
 
-### 2. New DSL API (`varcalc.dsl.*`)
+### 3. DSL API (`desargues.dsl.*`)
 
 #### Reactive Values (replaces ValueTracker)
 ```clojure
-(require '[varcalc.dsl.core :as dsl])
+(require '[desargues.dsl.core :as dsl])
 
 ;; Create reactive values
 (def x (dsl/reactive 0.5))
@@ -147,62 +412,61 @@ videos/                         # 3b1b reference videos (cloned repo)
 (dsl/step! ball 0.016)  ; ~60fps
 ```
 
-#### Mathematical Expressions
+### 4. Type Safety with Specs
+
 ```clojure
-(require '[varcalc.dsl.math :as math])
+;; In REPL (dev profile)
+(require '[user :refer :all])
 
-;; Create expressions with auto-coloring
-(def e (math/expr '(sin x) :colors {'x :blue}))
+;; Load all specs
+(require-all!)
 
-;; Symbolic operations
-(def de (math/derivative e 'x))  ; => cos(x)
-(math/simplify (math/expr '(+ x x)))  ; => (* 2 x)
+;; Instrument functions with specs
+(instrument-all!)
 
-;; Auto-generate colors for variables
-(math/auto-color (math/expr '(+ x y z)))
-; => Expression with {:x :blue :y :red :z :green}
+;; Run generative tests on a function
+(check-fn 'desargues.videos.physics/make-pendulum :num-tests 100)
+
+;; Check all functions in a namespace
+(check-ns 'desargues.videos.physics :num-tests 50)
+
+;; Explore specs
+(list-specs "desargues.specs.physics")
+(describe-spec ::phys/pendulum)
+
+;; Manual validation
+(valid? ::phys/pendulum {:length 1.0 :gravity 9.8})
+(explain ::phys/angle 400)  ; Shows why invalid
+
+;; Type checking (optional)
+(typecheck!)  ; Check instrumented namespaces
 ```
 
-### 3. Video Rendering (`varcalc.videos.render`)
+### 5. Video Rendering (`desargues.videos.render`)
 
 ```bash
 # Full brachistochrone derivation (12 steps, high quality)
-lein run -m varcalc.videos.render
+lein run -m desargues.videos.render
 
 # Just the intro scene
-lein run -m varcalc.videos.render intro
+lein run -m desargues.videos.render intro
 
 # Specific derivation step (1-12)
-lein run -m varcalc.videos.render step 7
+lein run -m desargues.videos.render step 7
 
 # Low quality for fast iteration (~4x faster)
-lein run -m varcalc.videos.render intro --low
-lein run -m varcalc.videos.render --low
+lein run -m desargues.videos.render intro --low
 
 # All steps as separate files (parallelizable)
-lein run -m varcalc.videos.render all-steps --low
+lein run -m desargues.videos.render all-steps --low
 ```
 
-**Quality/Performance:**
-| Quality | Resolution | Intro Time | Full Video |
-|---------|------------|------------|------------|
-| High    | 1080p60    | ~90s       | ~10+ min   |
-| Low     | 480p15     | ~20s       | ~2-3 min   |
-
-**Parallel Rendering:**
-```bash
-# Run in separate terminals for parallel rendering
-lein run -m varcalc.videos.render step 1 --low &
-lein run -m varcalc.videos.render step 2 --low &
-lein run -m varcalc.videos.render step 3 --low &
-```
-
-### 4. Low-level Manim Bindings (`varcalc.manim.*`)
+### 6. Low-level Manim Bindings (`desargues.manim.*`)
 
 ```clojure
-(require '[varcalc.manim.core :as manim])
-(require '[varcalc.manim.mobjects :as mob])
-(require '[varcalc.manim.animations :as anim])
+(require '[desargues.manim.core :as manim])
+(require '[desargues.manim.mobjects :as mob])
+(require '[desargues.manim.animations :as anim])
 
 ;; Initialize
 (manim/init!)
@@ -229,35 +493,88 @@ lein run -m varcalc.videos.render step 3 --low &
 ```
 ┌─────────────────────────────────────┐
 │          API Layer                  │
-│  varcalc.api, varcalc.dsl.*         │
+│  desargues.api, desargues.dsl.*     │
+│  desargues.devx.core                │
 │  (Facade pattern, DSL)              │
 └─────────────────┬───────────────────┘
                   │ depends on
 ┌─────────────────▼───────────────────┐
 │      Domain/Application Layer       │
-│  varcalc.domain.*, dsl.core/math    │
+│  desargues.domain.*, dsl.core/math  │
+│  desargues.devx.segment/graph       │
 │  (Protocols, Entities, Services)    │
 └─────────────────┬───────────────────┘
                   │ depends on
 ┌─────────────────▼───────────────────┐
 │       Infrastructure Layer          │
-│  varcalc.manim.*, dsl.renderer      │
+│  desargues.manim.*, dsl.renderer    │
+│  desargues.devx.renderer            │
 │  (Python interop, Manim adapters)   │
 └─────────────────────────────────────┘
 ```
 
+### DevX Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     devx/core.clj                            │
+│  Pure API Facade (SRP): segment, scene, render!, preview!    │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+     ┌──────────────────────┼──────────────────────┐
+     ▼                      ▼                      ▼
+┌─────────────┐    ┌──────────────┐    ┌───────────────────┐
+│  segment.clj│    │   graph.clj  │    │     repl.clj      │
+│  - Segment  │    │  - SceneGraph│    │  - watch!/unwatch!│
+│  - IHashable│    │  - DAG       │    │  - reload!        │
+│  - States   │    │  - Topo sort │    │  - Stateful REPL  │
+└─────────────┘    └──────────────┘    └───────────────────┘
+     │                      │
+     └──────────┬───────────┘
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    Supporting Modules                         │
+├──────────────┬──────────────┬──────────────┬────────────────┤
+│ quality.clj  │  events.clj  │   specs.clj  │ repository.clj │
+│ - Presets    │  - Observer  │  - Query     │ - Persistence  │
+│ - Registry   │  - emit!     │  - Compose   │ - Memory/File  │
+└──────────────┴──────────────┴──────────────┴────────────────┘
+                            │
+                            ▼
+                   ┌──────────────┐
+                   │ renderer.clj │
+                   │ - Render to  │
+                   │   partial    │
+                   │   files      │
+                   └──────────────┘
+                            │
+                            ▼
+              ┌─────────────────────────┐
+              │ backend.clj + backend/* │
+              │ - IRenderBackend        │
+              │ - Strategy pattern      │
+              │ - Manim, Mock backends  │
+              └─────────────────────────┘
+```
+
 ### Key Protocols
 
-| Protocol | Purpose |
-|----------|---------|
-| `IMathematicalObject` | Base for all math objects |
-| `IEvaluable` | Objects that can be evaluated |
-| `IDifferentiable` | Objects supporting differentiation |
-| `IRenderable` | Objects that can render to Manim |
-| `IAnimatable` | Objects that can be animated |
-| `Reactive` (DSL) | Reactive state containers |
-| `Temporal` (DSL) | Time-varying entities |
-| `Physical` (DSL) | Physics simulation objects |
+| Protocol | Location | Purpose |
+|----------|----------|---------|
+| `IMathematicalObject` | domain/protocols | Base for all math objects |
+| `IEvaluable` | domain/protocols | Objects that can be evaluated |
+| `IDifferentiable` | domain/protocols | Objects supporting differentiation |
+| `IRenderable` | domain/protocols | Objects that can render to Manim |
+| `IAnimatable` | domain/protocols | Objects that can be animated |
+| `ISegment` | devx/segment | Segment identity and state |
+| `IHashable` | devx/segment | Content-addressable hashing |
+| `IRenderBackend` | devx/backend | Strategy for rendering backends |
+| `IGraphRepository` | devx/repository | Repository for persistence |
+| `ISpecification` | devx/specs | Composable query predicates |
+| `IQualityProvider` | devx/quality | Quality settings provider |
+| `Reactive` | dsl/core | Reactive state containers |
+| `Temporal` | dsl/core | Time-varying entities |
+| `Physical` | dsl/core | Physics simulation objects |
 
 ## Critical Implementation Details
 
@@ -279,18 +596,90 @@ When creating Python Scene subclasses from Clojure, you **MUST** wrap construct 
   (py/create-class "MyScene" [Scene] {"construct" wrapped-construct}))
 
 ;; WRONG: Without wrapping, self is not passed!
-;; (py/create-class "MyScene" [Scene] {"construct" my-construct})
-;; => Error: Wrong number of args (0) passed to construct
 ```
 
-This fix is already applied in:
-- `varcalc.manim-quickstart/create-scene-class`
-- `varcalc.manim.core/create-scene-class`
-- `varcalc.videos.render` (all render functions)
+### Segment Hashing
+
+Segments use SHA-256 hashing for change detection:
+- Hash includes: construct-fn source, dependencies, metadata
+- Dependent segment hashes are combined
+- Changed hash = segment needs re-render
+
+```clojure
+;; Hash computation
+(seg/compute-segment-hash segment dep-hashes)
+;; => "abc123..." (SHA-256 base64)
+```
+
+### Partial Movie Files
+
+Manim generates partial movie files that can be combined:
+```
+media/partial_movie_files/
+├── intro_abc123.mp4
+├── main_def456.mp4
+└── outro_ghi789.mp4
+```
+
+The renderer tracks which partial files are valid and combines them:
+```clojure
+(renderer/combine-partials! graph "final.mp4")
+```
 
 ## Implementation Patterns
 
-### 1. Reactive Programming (DSL)
+### 1. Registry Pattern (OCP)
+```clojure
+;; Extensible without modification
+(defonce preset-registry (atom {}))
+
+(defn register-preset! [key settings]
+  {:pre [(keyword? key) (map? settings)]}
+  (swap! preset-registry assoc key settings))
+
+;; Extend by registration, not code changes
+(register-preset! :custom {:fps 24 :height 720})
+```
+
+### 2. Observer Pattern
+```clojure
+;; Decouple producers from consumers
+(defn emit! [event]
+  (doseq [[_id {:keys [handler filter]}] @observer-registry]
+    (when (filter event)
+      (try (handler event)
+           (catch Exception e
+             (log-error e))))))  ; Error isolation
+```
+
+### 3. Specification Pattern
+```clojure
+;; Composable predicates
+(defprotocol ISpecification
+  (satisfied? [this segment])
+  (spec-description [this]))
+
+(defrecord AndSpec [specs]
+  ISpecification
+  (satisfied? [_ segment]
+    (every? #(satisfied? % segment) specs)))
+
+;; Usage
+(find-segments graph (and-spec (dirty?) (independent?)))
+```
+
+### 4. Strategy Pattern
+```clojure
+;; Swappable implementations
+(defprotocol IRenderBackend
+  (render-segment [this segment opts]))
+
+;; Switch at runtime
+(set-backend! :mock)
+(with-backend :manim body...)
+```
+
+### 5. Reactive Programming (DSL)
 ```clojure
 ;; Instead of manual updaters (Python style):
 ;; tracker.add_updater(lambda m: m.set_value(get_max()))
@@ -300,7 +689,7 @@ This fix is already applied in:
 ;; Automatically updates when x1 or x2 change
 ```
 
-### 2. Data as Code
+### 6. Data as Code
 ```clojure
 ;; Animations are data structures, not imperative commands
 {:type :sequence
@@ -309,20 +698,18 @@ This fix is already applied in:
             {:type :transform :from :circle :to :square}]}
 ```
 
-### 3. Protocol-based Extensibility
+### 7. Spec-Driven Development
 ```clojure
-;; Add new shape types without modifying existing code
-(defmethod render-shape :my-custom-shape
-  [{:keys [opts]}]
-  ;; implementation
-  )
-```
+;; Define specs for functions
+(s/fdef make-pendulum
+  :args (s/cat :opts ::pendulum-opts)
+  :ret ::pendulum)
 
-### 4. Lazy Constants
-```clojure
-;; Colors are lazy to avoid Python init at load time
-(def RED (delay (manim/get-constant "RED")))
-;; Use with @RED
+;; Instrument during development
+(stest/instrument `make-pendulum)
+
+;; Generative testing
+(stest/check `make-pendulum {:num-tests 100})
 ```
 
 ## Python Environment Setup
@@ -339,7 +726,7 @@ pip install manim
 manim --version
 ```
 
-**Important**: Update paths in `src/varcalc/manim_quickstart.clj:init!` if your conda paths differ:
+**Important**: Update paths in `src/desargues/manim_quickstart.clj:init!` if your conda paths differ:
 ```clojure
 :python-executable "/home/lages/anaconda3/envs/manim/bin/python"
 :library-path "/home/lages/anaconda3/envs/manim/lib/libpython3.12.so"
@@ -358,30 +745,77 @@ lein run
 lein repl
 
 ;; In REPL:
-(require '[varcalc.api :as v])
+(require '[desargues.api :as v])
 (v/init!)
 (v/animate-derivative (v/expr '(sin x)))
+
+;; With type safety (dev profile):
+(require '[user :refer :all])
+(require-all!)
+(instrument-all!)
+(help)  ; Show all available commands
+
+;; With hot-reload (devx):
+(require '[desargues.devx.repl :as repl])
+(repl/watch!)   ; Start watching files
+(repl/s!)       ; Check status
 ```
 
 ### Running Tests
 ```bash
-lein test
+lein test                    # All tests
+lein test-props              # Property-based tests only
+lein test-all                # Typecheck + tests
 ```
 
 ### Checking Compilation
 ```bash
 lein check
+lein typecheck               # Static type checking
 ```
 
 ## Extension Points
 
+### Adding New Quality Presets
+```clojure
+(require '[desargues.devx.quality :as quality])
+(quality/register-preset! :4k {:quality "fourk_quality" :fps 60 :height 2160})
+```
+
+### Adding New Event Observers
+```clojure
+(require '[desargues.devx.events :as events])
+(events/register-observer! :my-observer
+  (fn [event] (process event))
+  :filter (fn [e] (= (:type e) :segment-rendered)))
+```
+
+### Adding New Specifications
+```clojure
+(require '[desargues.devx.specs :as specs])
+(defrecord MySpec [param]
+  specs/ISpecification
+  (satisfied? [_ segment] (check param segment))
+  (spec-description [_] (str "my-spec:" param)))
+```
+
+### Adding New Rendering Backends
+```clojure
+(require '[desargues.devx.backend :as backend])
+(defrecord MyBackend []
+  backend/IRenderBackend
+  (backend-name [_] :my-backend)
+  (render-segment [_ seg opts] ...))
+(backend/register-backend! (->MyBackend))
+```
+
 ### Adding New Mobject Types
-1. Add constructor in `src/varcalc/manim/mobjects.clj`
-2. Add render method in `src/varcalc/dsl/renderer.clj`
+1. Add constructor in `src/desargues/manim/mobjects.clj`
+2. Add render method in `src/desargues/dsl/renderer.clj`
 
 ### Adding New Animation Types
-1. Add constructor in `src/varcalc/manim/animations.clj`
-2. Add render method in `src/varcalc/dsl/renderer.clj`
+1. Add constructor in `src/desargues/manim/animations.clj`
+2. Add render method in `src/desargues/dsl/renderer.clj`
 
 ### Adding New Physics Forces
 ```clojure
@@ -392,16 +826,18 @@ lein check
       [0 0 0])))
 ```
 
-### Adding New Math Operations
-1. Add to `src/varcalc/dsl/math.clj`
-2. Implement using Emmy's symbolic capabilities
+## Development Roadmap
 
-## Reference Material
+The project follows a phased development plan:
 
-The `videos/` directory contains the cloned 3b1b videos repository with Python examples that inspired the DSL design:
-- `videos/_2024/puzzles/max_rand.py` - ValueTracker patterns
-- `videos/_2023/optics_puzzles/driven_harmonic_oscillator.py` - Physics simulations
-- `videos/_2025/laplace/main_equations.py` - Equation transformations
+| Phase | Name | Priority | Status |
+|-------|------|----------|--------|
+| 1 | Foundation: Scene Graph & Segment Model | HIGH | **Done** |
+| 2 | Hot Reload Infrastructure | HIGH | **Done** |
+| 3 | Smart Preview (Figwheel-style) | MEDIUM | **Done** |
+| 4 | Parallel Execution | MEDIUM | Pending |
+| 5 | DSL Completion & Integration | MEDIUM | Pending |
+| 6 | Developer Experience Polish | LOW | Pending |
 
 ## Output
 
@@ -410,10 +846,29 @@ Rendered videos are saved to `media/videos/` directory:
 - **Medium quality**: `media/videos/720p30/` - 720p at 30fps  
 - **Low quality**: `media/videos/480p15/` - 480p at 15fps (fast dev iteration)
 
-Use `--low` flag for fast iteration during development.
+Use `--low` flag or `:quality :low` for fast iteration during development.
+
+## Test Statistics
+
+| Category | Tests | Assertions |
+|----------|-------|------------|
+| DevX Core | 31 | 103 |
+| Quality | 10 | 15 |
+| Events | 16 | 24 |
+| Specs | 23 | 35 |
+| Backend | 14 | 21 |
+| Repository | 12 | 18 |
+| **Total** | **106+** | **216+** |
 
 ## Known Issues
 
 - Emmy reflection warnings during compilation (harmless)
 - SLF4J logger binding warning (harmless)
 - Python must be initialized before any Manim operations
+- Segment rendering requires Python environment to be active
+
+## Related Documentation
+
+- **`CLAUDE.md`** - Instructions for Claude Code AI assistant
+- **`docs/BOUNDED_CONTEXTS.md`** - DDD bounded context documentation
+- **`docs/ADR_CODE_QUALITY.md`** - Architecture Decision Record for code standards
