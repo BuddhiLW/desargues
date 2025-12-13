@@ -16,6 +16,7 @@
    - combine!: Combine partial files into final video"
   (:require [desargues.devx.segment :as seg]
             [desargues.devx.graph :as graph]
+            [desargues.devx.quality :as quality]
             [desargues.manim.core :as manim]
             [libpython-clj2.python :as py]
             [libpython-clj2.python.class :as py-class]
@@ -30,10 +31,9 @@
 (def ^:dynamic *preview-mode* false)
 (def ^:dynamic *output-dir* "media/videos")
 
-(def quality-settings
-  {:low {:quality "low_quality" :fps 15 :height 480}
-   :medium {:quality "medium_quality" :fps 30 :height 720}
-   :high {:quality "high_quality" :fps 60 :height 1080}})
+;; Quality settings are now extensible via desargues.devx.quality
+;; Use (quality/register-preset! :custom {...}) to add custom presets
+;; Use (quality/print-presets) to see available presets
 
 ;; =============================================================================
 ;; Manim Scene Creation
@@ -60,7 +60,7 @@
   "Render a single segment, returning updated segment with state.
    
    Options:
-   - :quality - :low, :medium, :high
+   - :quality - :low, :medium, :high, or custom registered preset
    - :preview - if true, only render last frame
    - :output-file - override output path"
   [segment & {:keys [quality preview output-file]
@@ -71,10 +71,11 @@
   (let [seg-id (seg/segment-id segment)
         output (or output-file (seg/partial-file-path segment))
         config (py/get-attr (manim/manim) "config")
-        q-settings (get quality-settings quality)]
+        q-settings (quality/resolve-quality quality)]
 
     (println (format "Rendering segment: %s (%s quality)"
-                     (name seg-id) (name quality)))
+                     (name seg-id)
+                     (if (keyword? quality) (name quality) "custom")))
 
     ;; Configure Manim
     (py/set-attr! config "quality" (:quality q-settings))
@@ -240,66 +241,15 @@
               nil)))))))
 
 ;; =============================================================================
-;; REPL Convenience Functions
-;; =============================================================================
-
-(defonce ^:private graph-atom (atom nil))
-
-(defn set-graph!
-  "Set the current working graph for REPL convenience functions."
-  [graph]
-  (reset! graph-atom graph))
-
-(defn get-graph
-  "Get the current working graph."
-  []
-  @graph-atom)
-
-(defn status
-  "Print status of current graph."
-  []
-  (if-let [g @graph-atom]
-    (graph/print-status g)
-    (println "No graph loaded. Use (set-graph! g) first.")))
-
-(defn render!
-  "Render dirty segments in current graph."
-  [& {:keys [quality parallel?] :as opts}]
-  (if-let [g @graph-atom]
-    (let [result (apply render-dirty! g (flatten (seq opts)))]
-      (reset! graph-atom result)
-      (status))
-    (println "No graph loaded. Use (set-graph! g) first.")))
-
-(defn preview!
-  "Preview a segment by ID."
-  [seg-id]
-  (if-let [g @graph-atom]
-    (if-let [seg (graph/get-segment g seg-id)]
-      (let [result (preview-segment! seg)]
-        (swap! graph-atom graph/update-segment seg-id (constantly result)))
-      (println "Segment not found:" seg-id))
-    (println "No graph loaded. Use (set-graph! g) first.")))
-
-(defn dirty!
-  "Mark a segment (and dependents) as dirty."
-  [seg-id]
-  (if-let [g @graph-atom]
-    (do
-      (swap! graph-atom graph/mark-dirty! seg-id)
-      (status))
-    (println "No graph loaded.")))
-
-(defn combine!
-  "Combine cached segments into final video."
-  [output-path]
-  (if-let [g @graph-atom]
-    (combine-partials! g output-path)
-    (println "No graph loaded.")))
-
-;; =============================================================================
 ;; Quality Helpers
 ;; =============================================================================
+
+;; NOTE: REPL convenience functions have been moved to desargues.devx.repl
+;; for better separation of concerns (SRP). Use:
+;;   (require '[desargues.devx.repl :as repl])
+;;   (repl/set-graph! g)
+;;   (repl/render!)
+;;   (repl/preview! :segment-id)
 
 (defmacro with-quality
   "Execute body with specified quality setting."

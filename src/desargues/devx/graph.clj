@@ -10,7 +10,7 @@
    ## Key Operations
    
    - add-segment: Add segment to graph
-   - mark-dirty!: Mark segment and dependents as dirty
+   - mark-dirty: Mark segment and dependents as dirty (pure)
    - render-order: Get topologically sorted segment IDs
    - dirty-segments: Get segments that need rendering
    - independent-segments: Get segments with no unrendered dependencies"
@@ -145,15 +145,15 @@
     (assoc-in graph [:segments seg-id] (apply f seg args))
     (throw (ex-info "Segment not found" {:segment seg-id}))))
 
-(defn mark-dirty!
+(defn mark-dirty
   "Mark a segment and all its dependents as dirty.
-   Returns updated graph."
+   Returns updated graph (pure function - no side effects)."
   [graph seg-id]
   (let [dependents (get (:edges graph) seg-id #{})
         ;; Mark this segment dirty
         graph (update-segment graph seg-id seg/mark-dirty)]
     ;; Recursively mark dependents
-    (reduce mark-dirty! graph dependents)))
+    (reduce mark-dirty graph dependents)))
 
 (defn mark-all-dirty
   "Mark all segments as dirty."

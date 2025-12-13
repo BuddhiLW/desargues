@@ -6,6 +6,9 @@
   :dependencies [[org.clojure/clojure "1.12.3"]
                  [org.mentat/emmy "0.32.0"]
                  [clj-python/libpython-clj "2.026"]
+                 ;; Hot reload infrastructure
+                 [com.nextjournal/beholder "1.0.2"]
+                 [io.github.tonsky/clj-reload "0.7.1"]
                  ;; Type safety
                  [org.clojure/test.check "1.1.1"]
                  [org.typedclojure/typed.clj.checker "1.3.0"]

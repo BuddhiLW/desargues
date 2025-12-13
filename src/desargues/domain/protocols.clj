@@ -2,26 +2,77 @@
   "Domain protocols (Interfaces for SOLID design)
    
    This namespace defines the core protocol interfaces following SOLID principles.
+   Protocols are split according to Interface Segregation Principle (ISP):
+   
+   ## Conversion Protocols (focused, single-responsibility)
+   - ILatexConvertible: Objects that can be converted to LaTeX
+   - IPythonConvertible: Objects that can be converted to Python code
+   - ISimplifiable: Objects that can be simplified
+   - IMetadata: Objects that carry metadata
+   
+   ## Mathematical Operation Protocols
+   - IEvaluable: Objects that can be evaluated at points
+   - IDifferentiable: Objects that support differentiation
+   - IIntegrable: Objects that support integration
+   
+   ## Rendering Protocols (Infrastructure)
+   - IRenderable: Objects that can be rendered visually
+   - IAnimatable: Objects that can be animated
+   
+   ## Scene Management Protocols
+   - IScene: Animation scene construction
+   - IAnimation: Animation control
+   
+   ## Number Theory Visualization Protocols
+   - IFactorizable: Objects that can be factored into primes
+   - IDotArrangement: Dot arrangement patterns for visualization
+   - INestedGrouping: Nested groupings with visual hierarchy
+   
    Type annotations are provided for compile-time checking with Typed Clojure."
   (:require [typed.clojure :as t]
             [desargues.types :as types]))
 
 ;; ============================================================================
-;; Core Domain Protocols
+;; Conversion Protocols (ISP: Single-responsibility interfaces)
 ;; ============================================================================
 
-(t/ann-protocol IMathematicalObject
-                to-latex [IMathematicalObject :-> types/LaTeXString]
-                to-python [IMathematicalObject :-> types/PythonCodeString]
-                simplify [IMathematicalObject :-> IMathematicalObject]
-                metadata* [IMathematicalObject :-> (t/Map t/Kw t/Any)])
+(t/ann-protocol ILatexConvertible
+                to-latex [ILatexConvertible :-> types/LaTeXString])
 
-(defprotocol IMathematicalObject
-  "Contract for any mathematical object"
-  (to-latex [this] "Convert to LaTeX representation")
-  (to-python [this] "Convert to Python code")
-  (simplify [this] "Simplify the mathematical object")
-  (metadata* [this] "Get metadata about this object"))
+(defprotocol ILatexConvertible
+  "Contract for objects that can be converted to LaTeX.
+   Implement this for any object that needs LaTeX rendering."
+  (to-latex [this] "Convert to LaTeX representation"))
+
+(t/ann-protocol IPythonConvertible
+                to-python [IPythonConvertible :-> types/PythonCodeString])
+
+(defprotocol IPythonConvertible
+  "Contract for objects that can be converted to Python code.
+   Only implement for objects that need Python interop (e.g., for Manim)."
+  (to-python [this] "Convert to Python code"))
+
+(t/ann-protocol ISimplifiable
+                simplify [ISimplifiable :-> ISimplifiable])
+
+(defprotocol ISimplifiable
+  "Contract for mathematical objects that can be simplified.
+   Implement for expressions, equations, and other reducible forms."
+  (simplify [this] "Return a simplified version of this object"))
+
+(t/ann-protocol IMetadata
+                get-metadata [IMetadata :-> (t/Map t/Kw t/Any)]
+                with-metadata [IMetadata (t/Map t/Kw t/Any) :-> IMetadata])
+
+(defprotocol IMetadata
+  "Contract for objects that carry metadata.
+   Provides immutable metadata access following value object semantics."
+  (get-metadata [this] "Get metadata map for this object")
+  (with-metadata [this meta] "Return new object with updated metadata"))
+
+;; ============================================================================
+;; Mathematical Operation Protocols
+;; ============================================================================
 
 (t/ann-protocol IEvaluable
                 evaluate [IEvaluable types/Point :-> t/Any]
@@ -133,13 +184,15 @@
 ;; ============================================================================
 
 (t/ann-protocol IExpressionRepository
-                save-expression [IExpressionRepository IMathematicalObject :-> types/ExpressionId]
-                find-expression [IExpressionRepository types/ExpressionId :-> (t/Option IMathematicalObject)]
-                find-all-expressions [IExpressionRepository :-> (t/Seq IMathematicalObject)]
+                save-expression [IExpressionRepository t/Any :-> types/ExpressionId]
+                find-expression [IExpressionRepository types/ExpressionId :-> (t/Option t/Any)]
+                find-all-expressions [IExpressionRepository :-> (t/Seq t/Any)]
                 delete-expression [IExpressionRepository types/ExpressionId :-> t/Bool])
 
 (defprotocol IExpressionRepository
-  "Repository for mathematical expressions"
+  "Repository for mathematical expressions.
+   Works with any expression type - uses structural typing rather than
+   requiring a specific protocol implementation."
   (save-expression [this expr] "Save an expression")
   (find-expression [this id] "Find expression by ID")
   (find-all-expressions [this] "Find all expressions")
@@ -155,3 +208,41 @@
   (save-scene [this scene] "Save a scene configuration")
   (find-scene [this id] "Find scene by ID")
   (render-saved-scene [this id] "Render a previously saved scene"))
+
+;; ============================================================================
+;; Number Theory Visualization Protocols
+;; ============================================================================
+
+(t/ann-protocol IFactorizable
+                prime-factors [IFactorizable :-> (t/Map t/Int t/Int)]
+                factorization-tree [IFactorizable :-> t/Any])
+
+(defprotocol IFactorizable
+  "Contract for objects that can be factored into primes.
+   Used for number theory visualizations."
+  (prime-factors [this] "Return prime factorization as {prime exponent}")
+  (factorization-tree [this] "Return nested factorization structure"))
+
+(t/ann-protocol IDotArrangement
+                to-dots [IDotArrangement :-> (t/Seq (t/Vec t/Num))]
+                dimensions [IDotArrangement :-> (t/Vec t/Int)]
+                arrangement-type [IDotArrangement :-> t/Kw])
+
+(defprotocol IDotArrangement
+  "Contract for dot arrangement patterns.
+   Defines how dots are spatially arranged for visualization."
+  (to-dots [this] "Convert to sequence of [x y z] dot positions")
+  (dimensions [this] "Return dimensions as [rows cols] or [x y z]")
+  (arrangement-type [this] "Return :grid-2d, :grid-3d, or :linear"))
+
+(t/ann-protocol INestedGrouping
+                nesting-depth [INestedGrouping :-> t/Int]
+                children [INestedGrouping :-> (t/Seq t/Any)]
+                grouping-levels [INestedGrouping :-> (t/Seq t/Any)])
+
+(defprotocol INestedGrouping
+  "Contract for nested groupings with visual hierarchy.
+   Used for visualizing factorization as nested rectangles/boxes."
+  (nesting-depth [this] "Return the maximum nesting depth")
+  (children [this] "Return child groupings or leaf elements")
+  (grouping-levels [this] "Return sequence of all grouping levels"))

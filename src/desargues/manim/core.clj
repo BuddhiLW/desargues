@@ -126,13 +126,36 @@
 (defn render-scene!
   "Render a scene instance.
    
+   Options:
+   - :output-file - custom output filename (without path or extension)
+   
    Note: Manim Community Edition's Scene.render() doesn't accept
    keyword arguments. For quality control, use Manim's config system."
   ([scene]
    (render-scene! scene {}))
-  ([scene _opts]
-   (py/call-attr scene "render")
-   (println "Rendering complete! Check media/videos/ directory.")))
+  ([scene {:keys [output-file]}]
+   (let [manim (py/import-module "manim")
+         config (py/get-attr manim "config")
+         scene-name (py/get-attr (py/get-attr scene "__class__") "__name__")
+         final-name (or output-file scene-name)
+         video-dir (py/get-attr config "video_dir")
+         ;; Get current output file path from config
+         current-output (py/get-attr config "output_file")]
+     ;; Render the scene
+     (py/call-attr scene "render")
+     ;; Rename the output file if needed
+     (when (and final-name (not= final-name "MyTestScene"))
+       (let [os (py/import-module "os")
+             shutil (py/import-module "shutil")
+             ;; Find the actual output file - use the current output path
+             current-path (str current-output)
+             new-path (clojure.string/replace current-path
+                                              #"[^/]+\.mp4$"
+                                              (str final-name ".mp4"))]
+         (when (py/call-attr (py/get-attr os "path") "exists" current-path)
+           (py/call-attr shutil "move" current-path new-path)
+           (println (str "Renamed to: " new-path)))))
+     (println (str "Rendering complete! Output: " final-name ".mp4")))))
 
 (defn create-scene-class
   "Create a custom Scene subclass with a construct function.
@@ -148,8 +171,11 @@
   [class-name construct-fn]
   (let [Scene (get-class "Scene")
         ;; Wrap the construct function to properly receive self
-        wrapped-construct (py-class/make-tuple-instance-fn construct-fn)]
-    (py/create-class class-name [Scene] {"construct" wrapped-construct})))
+        wrapped-construct (py-class/make-tuple-instance-fn construct-fn)
+        scene-class (py/create-class class-name [Scene] {"construct" wrapped-construct})]
+    ;; Explicitly set __name__ so Manim uses it for output filename
+    (py/set-attr! scene-class "__name__" class-name)
+    scene-class))
 
 ;; ============================================================================
 ;; Scene Helper Functions
