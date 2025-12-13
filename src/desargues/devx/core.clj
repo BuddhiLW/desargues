@@ -1,16 +1,19 @@
 (ns desargues.devx.core
-  "Developer Experience - Main API for hot-reload and incremental rendering.
+  "Developer Experience - Pure API for incremental rendering.
    
-   This is the primary entry point for the devx system. It provides:
-   - Scene definition via segments
-   - Hot-reload workflow
-   - REPL-friendly commands
-   - Preview and render functions
+   This is the primary entry point for the devx system. All functions
+   are pure (take scene-graph, return scene-graph) except for I/O operations.
+   
+   For stateful REPL workflow (current scene, hot-reload), use:
+     (require '[desargues.devx.repl :as repl])
    
    ## Quick Start
    
    ```clojure
    (require '[desargues.devx.core :as devx])
+   
+   ;; Initialize
+   (devx/init!)
    
    ;; Define segments
    (def intro 
@@ -28,14 +31,20 @@
    ;; Build scene graph
    (def my-scene (devx/scene [intro main-content]))
    
-   ;; Preview a segment
-   (devx/preview! my-scene :intro)
+   ;; Render and export (pure API - pass graph, get graph back)
+   (-> my-scene
+       (devx/render! :quality :high)
+       (devx/export! \"output.mp4\"))
+   ```
    
-   ;; Render dirty segments
-   (devx/render! my-scene)
+   ## REPL Workflow
    
-   ;; Combine into final video
-   (devx/export! my-scene \"output.mp4\")
+   For interactive development with hot-reload, use the repl namespace:
+   ```clojure
+   (require '[desargues.devx.repl :as repl])
+   (repl/set-graph! my-scene)
+   (repl/render!)
+   (repl/watch! :auto-render? true)
    ```"
   (:require [desargues.devx.segment :as seg]
             [desargues.devx.graph :as graph]
@@ -134,12 +143,13 @@
       (graph/add-segments segments)))
 
 (defn add-segment
-  "Add a segment to an existing scene."
+  "Add a segment to an existing scene.
+   Returns updated scene graph."
   [scene-graph segment]
   (graph/add-segment scene-graph segment))
 
 ;; =============================================================================
-;; Render Functions
+;; Render Functions (Pure API)
 ;; =============================================================================
 
 (defn render!
@@ -157,12 +167,14 @@
     (renderer/render-dirty! scene-graph :quality quality)))
 
 (defn render-all!
-  "Force re-render of all segments."
+  "Force re-render of all segments.
+   Returns updated scene graph."
   [scene-graph & opts]
   (apply renderer/render-all! scene-graph opts))
 
 (defn render-segment!
-  "Render a specific segment by ID."
+  "Render a specific segment by ID.
+   Returns updated scene graph."
   [scene-graph seg-id & opts]
   (apply renderer/render-segment-by-id! scene-graph seg-id opts))
 
@@ -172,6 +184,7 @@
 
 (defn preview!
   "Quick preview of a segment (renders last frame only).
+   Returns updated scene graph.
    
    Usage:
    (preview! my-scene :step-3)"
@@ -187,6 +200,7 @@
 
 (defn export!
   "Export scene to final video file.
+   Returns the output path on success.
    
    Usage:
    (export! my-scene \"output.mp4\")
@@ -215,7 +229,7 @@
 (defn dirty?
   "Check if any segments need rendering."
   [scene-graph]
-  (seq (graph/dirty-segments scene-graph)))
+  (boolean (seq (graph/dirty-segments scene-graph))))
 
 (defn dirty-segments
   "Get list of segments that need rendering."
@@ -223,23 +237,26 @@
   (graph/dirty-segment-ids scene-graph))
 
 ;; =============================================================================
-;; Change Management
+;; Change Management (Pure Functions)
 ;; =============================================================================
 
-(defn mark-dirty!
-  "Mark a segment (and its dependents) as dirty."
+(defn mark-dirty
+  "Mark a segment (and its dependents) as dirty.
+   Returns updated graph."
   [scene-graph seg-id]
-  (graph/mark-dirty! scene-graph seg-id))
+  (graph/mark-dirty scene-graph seg-id))
 
-(defn mark-all-dirty!
-  "Mark all segments as dirty."
+(defn mark-all-dirty
+  "Mark all segments as dirty.
+   Returns updated graph."
   [scene-graph]
   (graph/mark-all-dirty scene-graph))
 
-(defn invalidate!
-  "Alias for mark-dirty! - invalidate a segment's cache."
+(defn invalidate
+  "Alias for mark-dirty - invalidate a segment's cache.
+   Returns updated graph."
   [scene-graph seg-id]
-  (mark-dirty! scene-graph seg-id))
+  (mark-dirty scene-graph seg-id))
 
 ;; =============================================================================
 ;; Graph Visualization
@@ -255,63 +272,6 @@
   [scene-graph path]
   (spit path (->dot scene-graph))
   (println "Saved to:" path))
-
-;; =============================================================================
-;; REPL Workflow Helpers
-;; =============================================================================
-
-(defonce ^:private current-scene (atom nil))
-
-(defn use-scene!
-  "Set the current scene for REPL workflow."
-  [scene-graph]
-  (reset! current-scene scene-graph)
-  (renderer/set-graph! scene-graph)
-  (println "Scene loaded.")
-  (status scene-graph))
-
-(defn current
-  "Get the current scene."
-  []
-  @current-scene)
-
-(defn r!
-  "Quick render - render dirty segments in current scene."
-  [& opts]
-  (when-let [sg @current-scene]
-    (let [result (apply render! sg opts)]
-      (reset! current-scene result)
-      (status result)
-      result)))
-
-(defn p!
-  "Quick preview - preview a segment in current scene."
-  [seg-id]
-  (when-let [sg @current-scene]
-    (let [result (preview! sg seg-id)]
-      (reset! current-scene result)
-      result)))
-
-(defn d!
-  "Quick dirty - mark segment dirty in current scene."
-  [seg-id]
-  (when-let [sg @current-scene]
-    (let [result (mark-dirty! sg seg-id)]
-      (reset! current-scene result)
-      (status result)
-      result)))
-
-(defn s!
-  "Quick status - show current scene status."
-  []
-  (when-let [sg @current-scene]
-    (status sg)))
-
-(defn e!
-  "Quick export - export current scene."
-  [output-path & opts]
-  (when-let [sg @current-scene]
-    (apply export! sg output-path opts)))
 
 ;; =============================================================================
 ;; Example Usage
@@ -339,24 +299,17 @@
                      circle (Circle)]
                  (manim/play! scene (manim/get-class "Create") circle)))))
 
-  ;; Create scene
+  ;; Create scene graph
   (def my-scene (scene [intro step-1]))
 
-  ;; Use in REPL
-  (use-scene! my-scene)
+  ;; Pure API workflow
+  (-> my-scene
+      (render! :quality :low)
+      (export! "output.mp4"))
 
-  ;; Preview
-  (p! :intro)
-
-  ;; Render all dirty
-  (r!)
-
-  ;; Export
-  (e! "output.mp4" :quality :high)
-
-  ;; Check status
-  (s!)
-
-  ;; Mark dirty and re-render
-  (d! :intro)
-  (r!))
+  ;; Or use REPL workflow for interactive development:
+  ;; (require '[desargues.devx.repl :as repl])
+  ;; (repl/set-graph! my-scene)
+  ;; (repl/render!)
+  ;; (repl/watch! :auto-render? true)
+  )

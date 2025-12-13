@@ -3,6 +3,8 @@
   (:require [desargues.domain.math-expression :as expr]
             [desargues.domain.protocols :as p]
             [desargues.domain.services :as svc]
+            [desargues.domain.number-theory :as nt]
+            [desargues.domain.number-theory-services :as nts]
             [desargues.infrastructure.manim-adapter :as manim]
             [desargues.manim-quickstart :as mq]
             [emmy.env :as e]))
@@ -146,6 +148,147 @@
   "Compare multiple functions at same points"
   [functions points]
   (svc/compare-at-points functions points))
+
+;; ============================================================================
+;; Number Theory / Factorization API
+;; ============================================================================
+
+(defn factorize
+  "Create a prime factorization of n.
+   Returns a PrimeFactorization record with :n and :factors {prime exponent}."
+  [n]
+  (nt/create-factorization n))
+
+(defn factorization-str
+  "Get string representation of factorization (e.g., '24 = 2^3 × 3')."
+  [fact-or-n]
+  (if (number? fact-or-n)
+    (nts/factorization->str (nts/prime-factorize fact-or-n))
+    (nt/factorization->str fact-or-n)))
+
+(defn factorization-latex
+  "Get LaTeX representation of factorization."
+  [fact-or-n]
+  (if (number? fact-or-n)
+    (nts/factorization->latex (nts/prime-factorize fact-or-n))
+    (nt/factorization->latex fact-or-n)))
+
+(defn dot-array
+  "Create a visual array of n dots.
+   
+   Options:
+   - :spacing - distance between dots
+   - :direction - :horizontal or :vertical
+   - :color - dot color
+   - :radius - dot radius"
+  [n & opts]
+  ;; Requires manim.factorization - lazy require to avoid init issues
+  (require '[desargues.manim.factorization :as fact])
+  (apply (resolve 'desargues.manim.factorization/create-dot-array) n opts))
+
+(defn dot-grid
+  "Create a visual grid of dots.
+   
+   For 2D: (dot-grid rows cols)
+   For 3D: (dot-grid x y z :3d true)
+   
+   Options:
+   - :spacing - distance between dots
+   - :color - dot color
+   - :radius - dot radius
+   - :3d - use 3D spheres"
+  [& args]
+  (require '[desargues.manim.factorization :as fact])
+  (let [[dims opts] (split-with number? args)
+        opts-map (apply hash-map opts)]
+    (if (:3d opts-map)
+      (apply (resolve 'desargues.manim.factorization/create-dot-grid-3d)
+             (concat dims (mapcat identity (dissoc opts-map :3d))))
+      (apply (resolve 'desargues.manim.factorization/create-dot-grid-2d)
+             (concat dims (mapcat identity opts-map))))))
+
+(defn factorization-visual
+  "Create the complete factorization visualization for n.
+   Returns {:n :dots :levels :arrangement :factorization}
+   
+   Options:
+   - :colors - vector of colors for nesting levels
+   - :spacing - dot spacing
+   - :radius - dot radius  
+   - :prefer-3d - force 3D arrangement"
+  [n & {:keys [colors spacing radius prefer-3d]
+        :or {colors [:blue :red :green :yellow :purple]
+             spacing 0.5
+             radius 0.1
+             prefer-3d false}}]
+  (require '[desargues.manim.factorization :as fact])
+  ((resolve 'desargues.manim.factorization/create-factorization-hierarchy)
+   n :colors colors :spacing spacing :radius radius :prefer-3d prefer-3d))
+
+(defn animate-factorization
+  "Animate the prime factorization of n.
+   Shows dots, then progressively groups them with colored rectangles.
+   
+   Options:
+   - :colors - level colors (default [:blue :red :green :yellow :purple])
+   - :prefer-3d - force 3D (default false)
+   - :show-title - show equation title (default true)
+   - :quality - render quality (default 'medium_quality')"
+  [n & {:keys [colors prefer-3d show-title quality]
+        :or {colors [:blue :red :green :yellow :purple]
+             prefer-3d false
+             show-title true
+             quality "medium_quality"}}]
+  (require '[desargues.manim.factorization :as fact])
+  ((resolve 'desargues.manim.factorization/visualize-factorization!)
+   n :colors colors :prefer-3d prefer-3d :show-title show-title :quality quality))
+
+;; ============================================================================
+;; Factorization Scene Builder
+;; ============================================================================
+
+(defrecord FactorizationSceneBuilder [n colors prefer-3d show-title quality])
+
+(defn factorization-scene
+  "Start building a factorization scene."
+  []
+  (->FactorizationSceneBuilder nil [:blue :red :green :yellow :purple] false true "medium_quality"))
+
+(defn with-number
+  "Set the number to factorize."
+  [builder n]
+  (assoc builder :n n))
+
+(defn with-colors
+  "Set the level colors."
+  [builder colors]
+  (assoc builder :colors colors))
+
+(defn with-3d
+  "Enable or disable 3D visualization."
+  [builder enabled?]
+  (assoc builder :prefer-3d enabled?))
+
+(defn with-title
+  "Enable or disable title display."
+  [builder enabled?]
+  (assoc builder :show-title enabled?))
+
+(defn with-quality
+  "Set render quality ('low_quality', 'medium_quality', 'high_quality')."
+  [builder quality]
+  (assoc builder :quality quality))
+
+(defn build-factorization!
+  "Build and render the factorization scene."
+  [builder]
+  (when-not (:n builder)
+    (throw (ex-info "Must specify a number with (with-number builder n)" {})))
+  (animate-factorization (:n builder)
+                         :colors (:colors builder)
+                         :prefer-3d (:prefer-3d builder)
+                         :show-title (:show-title builder)
+                         :quality (:quality builder)))
 
 ;; ============================================================================
 ;; Convenience Macros
