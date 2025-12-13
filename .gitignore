@@ -17,3 +17,6 @@ __pycache__/
 __pycache__
 __pycache__/*
 .lsp/
+.claude/
+.clojure-mcp/
+videos/
