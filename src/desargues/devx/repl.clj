@@ -60,6 +60,19 @@
    
    ;; Show segment dependency graph
    (repl/show-graph)
+   ```
+   
+   ## Parallel Rendering (Phase 5)
+   
+   ```clojure
+   ;; Analyze parallelization potential
+   (repl/waves!)
+   
+   ;; Render with wave-based parallel execution
+   (repl/rp!)  ; or (repl/render-parallel!)
+   
+   ;; Estimate speedup
+   (repl/estimate-speedup 10.0)  ; avg 10s per segment
    ```"
   (:require [desargues.devx.segment :as seg]
             [desargues.devx.graph :as graph]
@@ -70,7 +83,8 @@
             [desargues.devx.preview :as preview]
             [desargues.devx.opengl :as opengl]
             [desargues.devx.selector :as selector]
-            [desargues.devx.quality :as quality]))
+            [desargues.devx.quality :as quality]
+            [desargues.devx.parallel :as parallel]))
 
 ;; =============================================================================
 ;; State Management
@@ -306,6 +320,67 @@
   [output-path & {:keys [quality] :or {quality :high}}]
   (when-let [_ (render! :quality quality)]
     (combine! output-path)))
+
+;; =============================================================================
+;; Parallel Rendering (Phase 5)
+;; =============================================================================
+
+(defn render-parallel!
+  "Render dirty segments using wave-based parallel execution.
+   
+   Segments are partitioned into waves based on dependencies.
+   Within each wave, segments are rendered in parallel.
+   
+   Options:
+   - :max-workers - Maximum parallel workers (default: 4)
+   - :quality - Quality preset (default: :low)
+   - :on-progress - Callback fn for progress events"
+  [& {:keys [max-workers quality on-progress]
+      :or {max-workers 4 quality :low}}]
+  (if-let [g @graph-atom]
+    (let [result (parallel/render-parallel! g
+                                            :max-workers max-workers
+                                            :quality quality
+                                            :on-progress on-progress)]
+      (reset! graph-atom result)
+      (status)
+      result)
+    (do (println "No graph loaded. Use (set-graph! g) first.")
+        nil)))
+
+(defn waves!
+  "Print wave analysis for current graph.
+   Shows how segments would be partitioned for parallel execution."
+  []
+  (if-let [g @graph-atom]
+    (parallel/print-wave-analysis g)
+    (do (println "No graph loaded. Use (set-graph! g) first.")
+        nil)))
+
+(defn estimate-speedup
+  "Estimate parallel speedup for current graph.
+   
+   Arguments:
+   - avg-segment-time-s: Average time to render one segment in seconds
+   - max-workers: Number of parallel workers (default: 4)"
+  [avg-segment-time-s & {:keys [max-workers] :or {max-workers 4}}]
+  (if-let [g @graph-atom]
+    (let [estimate (parallel/estimate-parallel-time g avg-segment-time-s max-workers)]
+      (println "\n=== Parallel Speedup Estimate ===")
+      (println (format "Sequential time: %.1fs" (:sequential-estimate-s estimate)))
+      (println (format "Parallel time:   %.1fs" (:parallel-estimate-s estimate)))
+      (println (format "Speedup factor:  %.2fx" (:speedup-factor estimate)))
+      (println (format "Waves: %d, Max parallelism: %d"
+                       (:total-waves (:stats estimate))
+                       (:max-parallelism (:stats estimate))))
+      estimate)
+    (do (println "No graph loaded. Use (set-graph! g) first.")
+        nil)))
+
+;; Shortcut
+(def rp!
+  "Shortcut for (render-parallel!)"
+  render-parallel!)
 
 ;; =============================================================================
 ;; Short Aliases (for quick REPL use)
