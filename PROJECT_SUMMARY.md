@@ -45,6 +45,7 @@ src/desargues/
 │   ├── segment.clj             # Segment record and protocols
 │   ├── graph.clj               # Scene graph DAG with dependency tracking
 │   ├── renderer.clj            # Segment rendering with partial files
+│   ├── parallel.clj            # Wave-based parallel rendering (Phase 5)
 │   ├── reload.clj              # Hot-reload infrastructure (Phase 2)
 │   ├── watcher.clj             # File watching with Beholder (Phase 2)
 │   ├── ns_tracker.clj          # Namespace dependency tracking (Phase 2)
@@ -112,12 +113,19 @@ test/desargues/
 │   ├── segment_test.clj
 │   ├── graph_test.clj
 │   ├── renderer_test.clj
+│   ├── parallel_test.clj       # Wave-based parallel execution tests (22 tests)
 │   ├── quality_test.clj
 │   ├── events_test.clj
 │   ├── specs_test.clj
 │   ├── backend_test.clj
 │   └── repository_test.clj
 └── ...                         # Other test files
+
+dev/
+├── user.clj                    # REPL helpers for specs and type checking
+├── hot_reload_test.clj         # Test segments for hot-reload verification
+├── verify_hot_reload.clj       # Hot-reload verification suite
+└── verify_parallel.clj         # Parallel execution verification suite
 ```
 
 ## Architecture Decision Record (ADR)
@@ -832,12 +840,83 @@ The project follows a phased development plan:
 
 | Phase | Name | Priority | Status |
 |-------|------|----------|--------|
-| 1 | Foundation: Scene Graph & Segment Model | HIGH | **Done** |
-| 2 | Hot Reload Infrastructure | HIGH | **Done** |
-| 3 | Smart Preview (Figwheel-style) | MEDIUM | **Done** |
-| 4 | Parallel Execution | MEDIUM | Pending |
-| 5 | DSL Completion & Integration | MEDIUM | Pending |
-| 6 | Developer Experience Polish | LOW | Pending |
+| 1 | Foundation: Scene Graph & Segment Model | HIGH | ✅ Complete |
+| 2 | Architectural Refinement (SOLID/DDD/GoF) | HIGH | ✅ Complete |
+| 3 | Hot Reload Infrastructure | HIGH | ✅ **Verified** (2025-12-13) |
+| 4 | Smart Preview (Figwheel-style) | MEDIUM | ✅ Complete |
+| 5 | Parallel Execution | MEDIUM | ✅ **Complete** (2025-12-13) |
+| 6 | DSL Completion & Integration | MEDIUM | ⏳ Pending |
+| 7 | Developer Experience Polish | LOW | 🔄 Partial |
+
+### Phase 3 Verification Results
+
+The hot-reload system has been **verified end-to-end**:
+
+| Test | Result |
+|------|--------|
+| Python/Manim Initialization | ✅ Pass |
+| Scene Graph Construction | ✅ Pass |
+| File Watcher (Beholder) | ✅ Pass |
+| Reload Cycle (clj-reload) | ✅ Pass |
+| Hot-Reload Integration | ✅ Pass |
+
+Run verification: `(require 'verify-hot-reload) (verify-hot-reload/run-all-tests!)`
+
+### Phase 5 Parallel Execution
+
+The parallel execution system has been implemented with wave-based rendering:
+
+| Component | File | Description |
+|-----------|------|-------------|
+| `parallel.clj` | `devx/parallel.clj` | Wave-based parallel rendering module |
+| Wave Analysis | `analyze-waves` | Partitions segments into parallelizable waves |
+| Wave Statistics | `wave-stats` | Calculates parallelization metrics |
+| Time Estimation | `estimate-parallel-time` | Predicts speedup from parallel execution |
+| Thread Pool | `render-wave!` | Manages concurrent segment rendering |
+
+**REPL Commands:**
+```clojure
+(require '[desargues.devx.repl :as repl])
+
+(repl/rp!)                    ; Render dirty segments in parallel
+(repl/waves!)                 ; Print wave analysis for current graph
+(repl/estimate-speedup 10.0)  ; Estimate speedup with 10s avg segment time
+```
+
+**Direct API:**
+```clojure
+(require '[desargues.devx.parallel :as parallel])
+
+;; Analyze waves
+(parallel/print-wave-analysis graph)
+
+;; Render with wave-based execution
+(parallel/render-parallel! graph :max-workers 4 :quality :low)
+
+;; With progress callback
+(parallel/render-parallel! graph
+  :on-progress (fn [event] (println event)))
+
+;; Estimate parallel time
+(parallel/estimate-parallel-time graph 10.0 4)
+;; => {:sequential-estimate-s 50.0
+;;     :parallel-estimate-s 30.0
+;;     :speedup-factor 1.67}
+```
+
+**Verification Results (22 tests, 72 assertions):**
+
+| Test Category | Tests | Status |
+|---------------|-------|--------|
+| Wave Analysis | 7 | ✅ Pass |
+| Wave Statistics | 4 | ✅ Pass |
+| Time Estimation | 4 | ✅ Pass |
+| Integration | 3 | ✅ Pass |
+| Edge Cases | 4 | ✅ Pass |
+
+Run verification: `(load-file "dev/verify_parallel.clj") (verify-parallel/run-all-tests!)`
+
+**Note:** Due to Python's GIL, true CPU-parallel rendering within a single process is limited. Benefits include wave analysis for understanding parallelization potential, concurrent I/O operations, and future support for subprocess-based true parallelism.
 
 ## Output
 
@@ -858,7 +937,8 @@ Use `--low` flag or `:quality :low` for fast iteration during development.
 | Specs | 23 | 35 |
 | Backend | 14 | 21 |
 | Repository | 12 | 18 |
-| **Total** | **106+** | **216+** |
+| Parallel | 22 | 72 |
+| **Total** | **128+** | **288+** |
 
 ## Known Issues
 

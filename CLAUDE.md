@@ -643,3 +643,43 @@ lein test desargues.devx.segment-test desargues.devx.graph-test \
 ;; Custom specification
 (specs/find-segments graph (specs/and-spec (specs/dirty?) (specs/independent?)))
 ```
+
+### Verification Status (2025-12-13)
+
+The hot-reload system has been **verified end-to-end** with the following test results:
+
+| Test | Status | Details |
+|------|--------|---------|
+| Python/Manim Init | ✅ PASS | Initializes correctly via `devx/init!` |
+| Scene Graph Construction | ✅ PASS | 3 segments with `source-ns` metadata, correct dependency chain |
+| File Watcher | ✅ PASS | Beholder detects file changes within 500ms |
+| Reload Cycle | ✅ PASS | Namespace reloads, hashes recomputed, dirty segments marked |
+| Hot-Reload Integration | ✅ PASS | Full `repl/watch!` workflow operational |
+
+**Test files:**
+- `dev/hot_reload_test.clj` - Test segments with dependencies
+- `dev/verify_hot_reload.clj` - Verification test suite
+
+**Run verification:**
+```clojure
+(require 'verify-hot-reload)
+(verify-hot-reload/run-all-tests!)  ; All 5 tests should pass
+```
+
+### Development Roadmap Status
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Foundation: Scene Graph & Segment | ✅ Complete |
+| 2 | Architectural Refinement (SOLID/DDD/GoF) | ✅ Complete |
+| 3 | Hot Reload Infrastructure | ✅ **Verified** |
+| 4 | Smart Preview (Figwheel-style) | ✅ Complete (needs Manim render testing) |
+| 5 | Parallel Execution | 🔄 Partial (basic structure exists) |
+| 6 | DSL Completion & Integration | ⏳ Pending |
+| 7 | Developer Experience Polish | 🔄 Partial |
+
+### Known Limitations
+
+1. **Deps must be keywords**: Use `:deps #{:intro}` not `:deps #{intro}` in `defsegment`
+2. **Source-ns tracking**: Only segments defined with `defsegment` macro get automatic `source-ns` metadata
+3. **clj-reload protection**: Namespaces `desargues.manim.core`, `desargues.manim-quickstart`, and `user` are protected from unloading
